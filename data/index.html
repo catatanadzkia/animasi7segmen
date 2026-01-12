@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master Control Jam Sholat v2.0</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link href="https://fonts.cdnfonts.com/css/digital-numbers" rel="stylesheet">
+                
+   
+    <style>
+		 /* Ambil font dari Google Fonts */
+@import url('https://fonts.cdnfonts.com/css/digital-numbers');
+
+        :root { --led-red: #ff0000; --panel-bg: #121212; }
+        body { background-color: #000; color: #e0e0e0; font-family: sans-serif; }
+        .monitor-frame { background: var(--panel-bg); border: 3px solid #333; border-radius: 20px; padding: 15px; }
+        .jadwal-box { background: #000; border: 1px solid #222; border-radius: 5px; font-size: 0.7rem; text-align: center; color: #888; }
+        .clock-display { font-family: monospace; font-size: 4rem; color: var(--led-red); text-shadow: 0 0 10px var(--led-red); }
+        .btn-main { height: 60px; font-weight: bold; border-radius: 12px; }
+        .card-custom { background: #1e1e1e; border: 1px solid #333; border-radius: 15px; margin-bottom: 15px; }
+        .skor-val { font-family: monospace; font-size: 3rem; color: #00ff00; background: #000; border-radius: 8px; padding: 0 10px; }
+        .modal-content { background: #1a1a1a; color: #fff; border: 1px solid #444; }
+        .nav-tabs .nav-link { color: #888; border: none; }
+        .nav-tabs .nav-link.active { background: #0d6efd; color: #fff; }
+        .form-control, .form-select { background: #2b2b2b; border: 1px solid #444; color: #fff; font-size: 0.85rem; }
+        .form-control:focus { background: #333; color: #fff; box-shadow: none; border-color: #0d6efd; }
+        .scroll-laci { max-height: 65vh; overflow-y: auto; padding-right: 5px; }
+        .clock-container {background-color: #111; /* Background gelap biar sangar */
+		padding: 20px;
+		border-radius: 10px;
+		display: inline-block;
+}
+        #jamDigit {
+			font-family: 'Digital Numbers', sans-serif;
+			width: 100%; /* Ukuran gede biar mantap */
+			color: #ff0000;  /* Warna merah khas LED Segmen */
+			text-shadow: 0 0 15px rgba(255, 0, 0, 0.6); /* Efek pendar (glow) LED */
+			line-height: 1;
+			letter-spacing: 5px;
+			transition: opacity 0.1s ease-in-out;
+			background: #000;
+			padding: 10px 20px;
+			border: 3px solid #333;
+}
+
+    </style>
+</head>
+<body>
+
+<div class="container mt-4">
+    <div id="halaman-konek-wifi" class="d-none">
+       <div id="halaman-konek-wifi" class="d-none p-3 border rounded bg-dark">
+    <h4 class="text-warning">Koneksi WiFi Rumah</h4>
+    <div class="mb-3">
+        <label class="form-label">Pilih WiFi Sekitar</label>
+        <select id="st-ssid" class="form-select text-dark">
+            <option value="">Sedang memindai...</option>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Password WiFi</label>
+        <input type="password" id="st-pass" class="form-control" placeholder="Masukkan password">
+    </div>
+    <button class="btn btn-warning w-100 fw-bold" onclick="simpanWifiRumah()">HUBUNGKAN & RESTART</button>
+</div>
+    </div>
+ </div>
+
+
+
+
+
+
+<div class="d-none container py-3 " id="halaman-konek-wifi">
+    <div class="monitor-frame mb-3 text-center">
+        <div class="row g-1 mb-2">
+            <div class="col"><div class="jadwal-box" id="disp_0">IMS<br>--:--</div></div>
+            <div class="col"><div class="jadwal-box" id="disp_1">SUB<br>--:--</div></div>
+            <div class="col"><div class="jadwal-box" id="disp_2">DZU<br>--:--</div></div>
+            <div class="col"><div class="jadwal-box" id="disp_3">ASH<br>--:--</div></div>
+            <div class="col"><div class="jadwal-box" id="disp_4">MAG<br>--:--</div></div>
+            <div class="col"><div class="jadwal-box" id="disp_5">ISY<br>--:--</div></div>
+        </div>
+        <div class="clock-display" id="jamDigit">00:00:00</div>
+        <div class="small text-white" id="devName">MENGHUBUNGKAN...</div>
+        <div class="d-flex justify-content-center mt-2">
+    <div class="btn-group shadow-sm" role="group" aria-label="System Status" style="border-radius: 50px; overflow: hidden; border: 1px solid #444;">
+        <div class="btn btn-dark btn-sm disabled text-white border-0 py-1 px-3" style="font-size: 11px; background: rgba(0,0,0,0.5);">
+            <i class="fas fa-clock text-info me-1"></i> <span id="statUptime">0j 0m</span>
+        </div>
+        
+        <div class="btn btn-dark btn-sm disabled text-white border-0 py-1 px-3" style="font-size: 11px; border-left: 1px solid #444 !important; background: rgba(0,0,0,0.5);">
+            <i class="fas fa-memory text-success me-1"></i> <span id="valRAM">0 K</span>
+        </div>
+        
+        <div class="btn btn-dark btn-sm disabled text-white border-0 py-1 px-3" style="font-size: 11px; border-left: 1px solid #444 !important; background: rgba(0,0,0,0.5);">
+            <i class="fas fa-wifi text-warning me-1"></i> <span id="valWiFi">0 db</span>
+        </div>
+        <div class="btn btn-dark btn-sm disabled text-white border-0 py-1 px-3" style="font-size: 11px; border-left: 1px solid #444 !important; background: rgba(0,0,0,0.5);">
+            <i class="fas fa-wifi text-warning me-1"></i> <span id="statTemp">0C</span>
+        </div>
+        <div class="btn btn-dark btn-sm disabled text-white border-0 py-1 px-3" style="font-size: 11px; border-left: 1px solid #444 !important; background: rgba(0,0,0,0.5);">
+            <i class="fas fa-wifi text-warning me-1"></i> <span id="valFS">0</span>
+        </div>
+        <div class="btn btn-dark btn-sm disabled text-white border-0 py-1 px-3" style="font-size: 11px; border-left: 1px solid #444 !important; background: rgba(0,0,0,0.5);">
+            <i class="fas fa-wifi text-warning me-1"></i> <span id="valFSU">0 C</span>
+        </div>
+        <div class="btn btn-dark btn-sm disabled text-white border-0 py-1 px-3" style="font-size: 11px; border-left: 1px solid #444 !important; background: rgba(0,0,0,0.5);">
+            <i class="fas fa-wifi text-warning me-1"></i> <span id="valFlash">0 C</span>
+        </div>
+
+        
+    </div>
+</div>
+
+<div class="text-center mt-1">
+    <small id="lastSyncDisplay" class="text-warning fw-bold text-uppercase" style="font-size: 9px; letter-spacing: 0.5px;">
+        UPDATE Jadwal Sholat: BELUM SYNC
+    </small>
+</div>
+
+    </div>
+    
+
+
+	<div class="card-custom p-3">
+    <div class="row g-2 mb-3">
+        <div class="col-6">
+            <div class="input-group">
+                <button class="btn btn-primary btn-main flex-grow-1 mx-1" onclick="showJam()">
+                    <i class="bi bi-clock"></i> JAM
+                </button>
+                <button class="btn btn-outline-primary" style="width:50px" data-bs-toggle="modal" data-bs-target="#modalSistem">
+                    <i class="bi bi-gear-fill"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="col-6">
+            <button class="btn btn-primary btn-main w-100 mx-1" onclick="showJadwal()">
+                <i class="bi bi-calendar-event"></i> JADWAL
+            </button>
+        </div>
+
+        <div class="col-6">
+            <button class="btn btn-info btn-main w-100 text-white" data-bs-toggle="modal" data-bs-target="#modalEfek">
+                <i class="bi bi-magic"></i> EFEK
+            </button>
+        </div>
+        
+        <div class="col-6">
+            <div class="px-2">
+                <label class="form-label d-flex justify-content-between mb-0" style="font-size: 0.75rem;">
+                    <span>Cerah</span>
+                    <span id="valBr" class="fw-bold text-primary">200</span>
+                </label>
+                <input type="range" class="form-range" id="br" min="0" max="255" oninput="liveBr(this.value)">
+            </div>
+        </div>
+    </div> </div>
+
+	
+	
+	<div class="row g-2">
+        <div class="col-12 col-md-6">
+    <div class="card-custom p-3 h-100">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="small fw-bold text-info"><i class="bi bi-bug"></i> PENGUSIR HAMA</span>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="u_on" onchange="liveUpdateHama()">
+            </div>
+        </div>
+        
+        <div class="row g-2">            
+            <div class="col-6">
+                <label class="small text-white mb-1">Min (Hz)</label>
+                <select id="u_fMin" class="form-select form-select-sm">
+                    <option value="15000">15.000 Hz</option>
+                    <option value="20000" selected>20.000 Hz</option>
+                    <option value="25000">25.000 Hz</option>
+                </select>
+            </div>
+            <div class="col-6">
+                <label class="small text-white mb-1">Max (Hz)</label>
+                <select id="u_fMax" class="form-select form-select-sm">
+                    <option value="35000">35.000 Hz</option>
+                    <option value="45000" selected>45.000 Hz</option>
+                    <option value="55000">55.000 Hz</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <label class="small text-muted mb-1">Interval Perubahan (Jeda Acak)</label>
+			<select id="u_interval" class="form-select form-select-sm">
+				<option value="5000">5 Detik (Agresif)</option>
+				<option value="15000">15 Detik (Cepat)</option>
+				<option value="30000">30 Detik (Sedang)</option>
+				<option value="60000">1 Menit (Normal)</option>
+				<option value="300000">5 Menit (Santai)</option>
+				<option value="600000">10 Menit (Hemat Daya)</option>
+			</select>
+        </div>
+        
+        <div class="d-flex justify-content-between align-items-center mt-2">
+            <div class="form-check m-0">
+                <input class="form-check-input" type="checkbox" id="u_malam">
+                <label class="form-check-label small text-white-50" for="u_malam">Malam saja</label>
+            </div>
+            
+            <button class="btn btn-info btn-sm px-4 fw-bold shadow-sm" onclick="simpanHama()">
+                SET
+            </button>
+        </div>
+        </div>
+</div>
+
+        <div class="col-12 col-md-6">
+            <div class="card-custom p-3 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold text-success"><i class="bi bi-trophy"></i> PAPAN SKOR</span>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="skor_s">
+                    </div>
+                </div>
+                
+                <div class="row align-items-center text-center g-1">
+                    <div class="col-5">
+                        <div class="skor-val" id="skor_a" style="font-size: 2.5rem;">00</div>
+                        <div class="btn-group w-100 mt-2">
+                            <button class="btn btn-sm btn-danger" onclick="setSkor('a',-1)">-</button>
+                            <button class="btn btn-sm btn-success" onclick="setSkor('a',1)">+</button>
+                        </div>
+                    </div>
+                    
+                    <div class="col-2 px-0">
+                        <button class="btn btn-outline-light btn-sm mb-1 p-1" onclick="swapSkor()">
+                            <i class="bi bi-arrow-left-right"></i>
+                        </button>
+                        <div style="font-size: 10px;">BBK</div>
+                        <div class="fw-bold text-warning" id="skor_bk">1</div>
+                    </div>
+                    
+                    <div class="col-5">
+                        <div class="skor-val" id="skor_b" style="font-size: 2.5rem;">00</div>
+                        <div class="btn-group w-100 mt-2">
+                            <button class="btn btn-sm btn-danger" onclick="setSkor('b',-1)">-</button>
+                            <button class="btn btn-sm btn-success" onclick="setSkor('b',1)">+</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+
+
+<div class="modal fade" id="modalSistem" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content bg-dark text-white border-secondary">
+            
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-primary"><i class="bi bi-box-seam me-2"></i>Pengaturan Jam</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body p-0">
+                <ul class="nav nav-tabs nav-fill bg-dark border-secondary" id="tabSistem" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#sholat" type="button">Sholat</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#agenda" type="button">Visual</button>
+                    </li> 
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#modeEfek" type="button">Mode Efek</button>
+                    </li>                     
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#wifiSet" type="button">Pengaturan WIFI</button>
+                    </li>                     
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#system" type="button">Sistem</button>
+                    </li>
+                </ul>
+
+                <div class="tab-content p-3" style="max-height: 70vh; overflow-y: auto;">
+                    
+                    <div class="tab-pane fade show active" id="sholat">
+                        <div class="card-custom p-3 border-primary mb-3">
+                            <h6 class="text-primary mb-3"><i class="bi bi-gear-wide-connected me-2"></i>Skenario Notifikasi Sholat</h6>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <div class="p-2 rounded bg-dark border border-secondary">
+                                        <label class="form-label small fw-bold text-info text-uppercase">1. Fase Peringatan </label>
+                                        <div class="row g-2">
+                                            <div class="col-4">
+                                                <label class="small text-white d-block">Notif Adzan (Mnt)</label>
+                                                <input type="number" class="form-control form-control-sm" id="menitPeringatan">
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="small text-white d-block">ID Efek</label>
+                                                <input type="number" class="form-control form-control-sm" id="idEfekPeringatan">
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="small text-white d-block">Mundur (Dtk)</label>
+                                                <input type="number" class="form-control form-control-sm" id="hitungMundur">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="p-2 rounded bg-dark border border-secondary">
+                                        <label class="form-label small fw-bold text-success text-uppercase">2. Notif Sholat</label>
+                                        <div class="row g-2">
+                                            <div class="col-6">
+                                                <label class="small text-white d-block">ID Efek</label>
+                                                <input type="number" class="form-control form-control-sm" id="idEfekAdzan">
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="small text-white d-block">Durasi (Mnt)</label>
+                                                <input type="number" class="form-control form-control-sm" id="durasiAdzan">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="p-2 rounded bg-dark border border-secondary">
+                                        <label class="form-label small fw-bold text-warning text-uppercase">3. Fase Hemat (Sleep)</label>
+                                        <div class="row g-2 align-items-center">
+                                            <div class="col-6">
+                                                <label class="small text-white d-block">Mulai Redup</label>
+                                                <input type="number" class="form-control form-control-sm" id="menitHemat">
+                                            </div>
+                                            <div class="col-6 text-center">
+                                                <label class="small text-white d-block">Level Redup</label>
+                                                <input type="range" class="form-range" id="kecerahanHemat" min="0" max="255">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="agenda">
+                        <div class="card-custom p-3 border-info mb-3">
+                            <h6 class="text-info mb-3"><i class="bi bi-eye me-2"></i>Visual Efek Tanggal</h6>
+                            <div class="form-check form-switch p-2 mb-3 rounded bg-dark border border-secondary mx-0 d-flex justify-content-between align-items-center">
+                                <label class="form-check-label small text-white ms-4">ON / OFF</label>
+                                <input class="form-check-input me-1" type="checkbox" id="tgl_aktif">
+                            </div>
+                            <div class="p-2 rounded bg-dark border border-secondary mb-3">
+                                <label class="form-label small fw-bold text-white text-uppercase">Tampilan</label>
+                                <div class="row g-2">
+                                    <div class="col-6">
+										<label class="small text-white">Detik Ke</label>                                        
+                                        <input type="number" class="form-control form-control-sm" min="0" max="120" id="tgl_setiap">                                        
+                                    </div>
+                                    <div class="col-6 mt-2">
+                                        <label class="small text-white">Lama Tampilan</label>
+                                        <input type="number" class="form-control form-control-sm" min="0" max="10"  id="tgl_lama">
+                                    </div>                           
+                                </div>
+                            </div>
+                            
+                            <div class="p-2 rounded bg-dark border border-secondary mb-3">
+                                <label class="form-label small fw-bold text-white text-uppercase">Mode Tampilan</label>
+                                <div class="row g-2">
+									<div class="col-6 mt-2">
+                                        <label class="small text-white text-nowrap">Format</label>
+                                        <select class="form-select form-select-sm" id="tgl_format">
+                                            <option value="0">DD:MM</option>
+                                            <option value="1">MM:YY</option>
+                                            <option value="2">YYYY</option>                                         
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+										<label class="small text-white text-nowrap">Efek</label>
+										<select class="form-select form-select-sm" id="tgl_efek">
+                                            <option value="1">Effect 1</option>
+                                            <option value="2">Effect 2</option>
+                                            <option value="3">Effect 3</option>
+                                            <option value="4">Effect 4</option>
+                                            <option value="5">Effect 5</option>
+                                            <option value="6">Effect 6</option>
+                                            <option value="7">Effect 7</option>
+                                        </select>
+                                    </div>
+                                
+                                    <div class="col-6 mt-2">
+                                        <label class="small text-white">Tampilan dp</label>
+                                        <select class="form-select form-select-sm" id="tgl_speed_dp">
+                                            <option value="0">Tidak ada</option>
+                                            <option value="1">DP 1</option>
+                                            <option value="2">DP 2</option>
+                                            <option value="3">DP 1 & 2</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="col-6 mt-2">
+                                        <label class="small text-white">Kecepatan</label>
+                                        <select class="form-select form-select-sm" id="tgl_dp">
+                                            <option value="500">Lambat</option>
+                                            <option value="250">Sedang</option>
+                                            <option value="100">Cepat</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                        
+                            
+                        </div>
+                    </div>
+                    
+                    <div class="tab-pane fade" id="modeEfek">
+
+						<div class="card-custom p-3 border-primary mb-3">
+							<h6 class="text-primary mb-3"><i class="bi bi-palette2 me-2"></i>Editor Animasi Segmen (15 Slot)</h6>
+							
+							<div class="p-2 rounded bg-dark border border-secondary mb-3">
+								<label class="form-label small fw-bold text-white text-uppercase">Pilih Slot Efek</label>
+								<select id="slotEfek" class="form-control form-control-sm text-white bg-dark" onchange="loadSlot(this.value)">
+									</select>
+							</div>
+
+							<div class="p-2 rounded bg-dark border border-secondary mb-3">
+								<div class="row g-2">
+									<div class="p-2 rounded bg-black border border-secondary mb-3">
+										<div id="painter" style="width: 80px; height: 120px; position: relative; margin: 0 auto;">
+											<div class="seg a bg-secondary rounded" data-bit="1" style="top:0; left:15px; width:50px; height:8px; cursor:pointer; position:absolute;"></div>
+											<div class="seg b bg-secondary rounded" data-bit="2" style="top:10px; right:5px; width:8px; height:45px; cursor:pointer; position:absolute;"></div>
+											<div class="seg c bg-secondary rounded" data-bit="4" style="top:65px; right:5px; width:8px; height:45px; cursor:pointer; position:absolute;"></div>
+											<div class="seg d bg-secondary rounded" data-bit="8" style="bottom:0; left:15px; width:50px; height:8px; cursor:pointer; position:absolute;"></div>
+											<div class="seg e bg-secondary rounded" data-bit="16" style="top:65px; left:5px; width:8px; height:45px; cursor:pointer; position:absolute;"></div>
+											<div class="seg f bg-secondary rounded" data-bit="32" style="top:10px; left:5px; width:8px; height:45px; cursor:pointer; position:absolute;"></div>
+											<div class="seg g bg-secondary rounded" data-bit="64" style="top:56px; left:15px; width:50px; height:8px; cursor:pointer; position:absolute;"></div>
+										</div>
+										
+										<button type="button" class="btn btn-primary btn-sm w-100 mt-3" onclick="tambahFrame()">
+											<i class="bi bi-plus-circle me-1"></i>Tambah Frame
+										</button>
+									</div>
+
+									<div class="col-7 ps-2">
+										<label class="small text-white">Mode</label>
+										<select id="modeAnimasi" class="form-control form-control-sm mb-2" onchange="simpanKeObjekLokal()">
+											<option value="1">Mode 1: Chase</option>
+											<option value="2">Mode 2: Raindrop</option>
+											<option value="4">Mode 3: Breathing</option>
+											<option value="5">Mode 4: Strobo</option>
+											<option value="6">Mode 5: Kedip</option>
+											<option value="7">Mode 6: Wave</option>
+										</select>
+										
+										<div class="row g-1 mb-2">
+											<div class="col-7">
+												<label class="small text-white">Speed</label>
+												<input type="number" id="speedEfek" class="form-control form-control-sm" oninput="simpanKeObjekLokal()">
+											</div>
+											<div class="col-5 text-center">
+												<label class="small text-white">DP</label>
+												<div class="form-check form-switch d-flex justify-content-center">
+													<input class="form-check-input" type="checkbox" id="pakaiDP" onchange="simpanKeObjekLokal()">
+												</div>
+											</div>
+										</div>
+										
+										<label class="small text-white">Kecerahan</label>
+										<input type="range" id="brightEfek" class="form-range" min="0" max="255" onchange="simpanKeObjekLokal()">
+									</div>
+								</div>
+							</div>
+
+							<div class="p-2 rounded bg-black border border-secondary">
+								<label class="form-label small fw-bold text-white text-uppercase">Antrian Frame (Maks 8)</label>
+								<div id="previewContainer" class="d-flex gap-2 overflow-auto" style="min-height: 45px;">
+									</div>
+								<small class="text-muted" style="font-size: 9px;">*Klik frame untuk hapus</small>
+							</div>
+						</div>
+					</div>
+					
+					<div class="tab-pane fade" id="wifiSet">
+						<div class="p-3">
+							<div class="alert alert-info">
+								<strong>Status Saat Ini:</strong><br>
+								SSID: <span id="cur-ssid">-</span> | IP: <span id="cur-ip">0.0.0.0</span>
+							</div>
+
+							<hr>
+
+							<div class="form-group">
+								<label>Cari WiFi Sekitar</label>
+								<div class="input-group mb-3">
+									<button class="btn btn-outline-secondary" type="button" onclick="scanWiFi()">Scan WiFi</button>
+								</div>
+								<div id="scan-loading" class="text-center d-none">
+									<div class="spinner-border spinner-border-sm text-primary"></div> Menghitung sinyal...
+								</div>
+								<div id="scan-result" class="list-group mb-3" style="max-height: 200px; overflow-y: auto;">
+									</div>
+							</div>
+
+							<div class="form-group mb-3">
+								<label>SSID Tujuan</label>
+								<input type="text" id="wifi-ssid" class="form-control" placeholder="Nama WiFi">
+							</div>
+
+							<div class="form-group mb-3">
+								<label>Password WiFi</label>
+								<input type="password" id="wifi-pass" class="form-control" placeholder="Password">
+							</div>
+
+							<button type="button" class="btn btn-primary btn-block" onclick="simpanWifi()">
+								Hubungkan & Simpan
+							</button>
+						</div>
+					</div>
+
+                    <div class="tab-pane fade" id="system">
+                        <div class="card-custom p-3 border-danger mb-3">
+                            <h6 class="text-danger mb-3"><i class="bi bi-cpu me-2"></i>Pengaturan Perangkat</h6>
+                            
+                            <div class="p-2 rounded bg-dark border border-secondary mb-3">
+                                <label class="form-label small fw-bold text-white text-uppercase">Link Sync</label>
+                                <div class="row g-2">
+                                    <div class="col-6 mb-2">
+                                        <label class="small text-white">Url GAPPS</label>
+                                        <input type="text" id="GApps" class="form-control form-control-sm">
+                                    </div>
+                                <div class="col-6 mb-2">
+                                        <button type="button" id="btnGas" onclick="gasSekarang()" class="btn btn-primary btn-sm py-1 px-3" style="font-size: 11px; font-weight: bold;">
+            Sinkron
+        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="p-2 rounded bg-dark border border-secondary mb-3">
+                                <label class="form-label small fw-bold text-white text-uppercase">Identitas</label>
+                                <div class="row g-2">
+                                    <div class="col-6 mb-2">
+                                        <label class="small text-white">Nama Alat</label>
+                                        <input type="text" id="dev" class="form-control form-control-sm">
+                                    </div>
+                                    
+                                    <div class="col-6 mb-2">
+										<label class="small text-white">Jumlah Digit Hardware</label>
+										<select id="jumlahDigit" class="form-control">
+											<option value="4">4 Digit (Jam:Menit)</option>
+											<option value="6">6 Digit (Jam:Menit:Detik)</option>
+										</select>
+									</div>
+                                    
+                                    <div class="col-6">
+                                        <label class="small text-white">User</label>
+                                        <input type="text" id="user" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="small text-white">Password</label>
+                                        <input type="password" id="pass" class="form-control form-control-sm">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                        </div>
+                    </div>
+
+                </div> </div> <div class="modal-footer border-secondary bg-dark">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                <button type="button" class="btn btn-primary btn-sm px-4" onclick="simpanLaci()"><i class="bi bi-save me-2"></i>Simpan Konfigurasi</button>
+            </div>
+
+        </div>
+    </div>
+</div>
+					
+					
+		    
+<div class="modal fade" id="modalEfek" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark border-info shadow-lg">
+            
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-info"><i class="bi bi-display me-2"></i>Live Simulator</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="setModeAnimasi(false)"></button>
+            </div>
+            
+            <div class="modal-body text-center">
+                <div class="card bg-black border-secondary mb-4 shadow-sm">
+                    <div class="card-body py-5">
+                        <div id="visualPreview" style="width: 70px; height: 110px; position: relative; margin: 0 auto;">
+                            <div class="seg seg-a bg-secondary rounded" id="sim-a" style="top:0; left:12px; width:45px; height:7px; position:absolute;"></div>
+                            <div class="seg seg-b bg-secondary rounded" id="sim-b" style="top:8px; right:2px; width:7px; height:40px; position:absolute;"></div>
+                            <div class="seg seg-c bg-secondary rounded" id="sim-c" style="top:54px; right:2px; width:7px; height:40px; position:absolute;"></div>
+                            <div class="seg seg-d bg-secondary rounded" id="sim-d" style="bottom:0; left:12px; width:45px; height:7px; position:absolute;"></div>
+                            <div class="seg seg-e bg-secondary rounded" id="sim-e" style="top:54px; left:2px; width:7px; height:40px; position:absolute;"></div>
+                            <div class="seg seg-f bg-secondary rounded" id="sim-f" style="top:8px; left:2px; width:7px; height:40px; position:absolute;"></div>
+                            <div class="seg seg-g bg-secondary rounded" id="sim-g" style="top:47px; left:12px; width:45px; height:7px; position:absolute;"></div>
+                        </div>
+                        <div id="statusAnimasi" class="mt-4 small fw-bold text-info text-uppercase">Ready to Run</div>
+                    </div>
+                </div>
+
+                <div class="p-3 rounded bg-dark border border-warning">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <button class="btn btn-danger btn-lg w-100 fw-bold py-3 shadow" onclick="setModeAnimasi(true)">
+                                <i class="bi bi-play-all-fill"></i> RUN ALL
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button class="btn btn-outline-light btn-lg w-100 fw-bold py-3 shadow" onclick="setModeAnimasi(false)">
+                                <i class="bi bi-stop-circle"></i> STOP
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-white-50 mt-3 mb-0" style="font-size: 11px;">
+                        Status Alat: <span id="labelKoneksi" class="text-success">Connected</span>
+                    </p>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal" onclick="setModeAnimasi(false)">CLOSE & KEMBALI KE JAM</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="main.js"></script>
+<script src="config.js"></script>
+</body>
+</html>
