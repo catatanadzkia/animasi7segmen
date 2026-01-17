@@ -22,100 +22,146 @@ void tampilkanKeSegmen(uint8_t* buf) {
 
 
 void prosesAnimasiEfek(int idEfek) {
-  int i = 0;
-  bool found = false;
-  while (i < 15) {
-    if (konfig.daftarEfek[i].id == idEfek) {
-      found = true;
-      break;
-    }
-    i++;
+  // ✅ KONVERSI ID KE SLOT (ID 1 = Slot 0, ID 15 = Slot 14)
+  int slot = idEfek - 1;
+  
+  // ✅ VALIDASI SLOT
+  if (slot < 0 || slot >= 15) {
+    Serial.printf("⚠️ ID Efek %d invalid (slot %d)\n", idEfek, slot);
+    return;
   }
-  if (!found || konfig.daftarEfek[i].jumlahFrame <= 0) return;
+  
+  if (konfig.daftarEfek[slot].jumlahFrame <= 0) {
+    Serial.printf("⚠️ Efek Slot %d kosong\n", slot);
+    return;
+  }
 
   // Persiapan Variabel
-  int speed = konfig.daftarEfek[i].kecepatan;
-  int mode = konfig.daftarEfek[i].mode;
-  int brDasar = konfig.daftarEfek[i].kecerahan;
+  int speed = konfig.daftarEfek[slot].kecepatan;
+  int mode = konfig.daftarEfek[slot].mode;
+  int brDasar = konfig.daftarEfek[slot].kecerahan;
   unsigned long skrg = millis();
 
-  // --- KUNCI: CEK POLA 0 ---
-  bool pakaiPolaJam = (konfig.daftarEfek[i].polaSegmen[0] == 0);
+  // --- KUNCI: CEK APAKAH PAKAI POLA JAM ATAU CUSTOM ---
+  bool pakaiPolaJam = (konfig.daftarEfek[slot].polaSegmen[0] == 0);
 
-  uint8_t bufferJam[MAX_DIGIT];  // Pakai MAX_DIGIT agar aman sesuai fungsi Bos
+  // Buffer untuk angka jam (jika pakaiPolaJam = true)
+  uint8_t bufferJam[MAX_DIGIT];
   if (pakaiPolaJam) {
     extern struct tm timeinfo;
-    // Panggil fungsi milik Bos.
-    // titikNyala kita set true/false sesuai detik (kedip) atau dipaksa true
     bool detikKedip = (timeinfo.tm_sec % 2 == 0);
     buatBufferWaktu(timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec, bufferJam, detikKedip);
   }
 
-  int frameAktif = (skrg / speed) % konfig.daftarEfek[i].jumlahFrame;
+  // Hitung frame aktif saat ini
+  int frameAktif = (skrg / speed) % konfig.daftarEfek[slot].jumlahFrame;
   int brFinal = brDasar;
 
+  // ========================================
+  // LOOP UNTUK SETIAP DIGIT
+  // ========================================
   for (int d = 0; d < konfig.jumlahDigit; d++) {
     uint8_t bitmask = 0;
 
     switch (mode) {
-      case 1:  // MODE CHASE (Angka Jam Berlari)
-        if (pakaiPolaJam) {
-          bitmask = bufferJam[(d + frameAktif) % konfig.jumlahDigit];
-        } else {
-          bitmask = konfig.daftarEfek[i].polaSegmen[(frameAktif + d) % konfig.daftarEfek[i].jumlahFrame];
-        }
-        break;
-
-      case 2:  // MODE RAINDROP (Jatuh Satu-satu)
+      
+      case 1: // MODE 1: FADE IN/OUT
         {
-          int fHujan = (skrg / (speed + (d * 15))) % 2;
-          uint8_t pola = pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[i].polaSegmen[frameAktif];
-          bitmask = (fHujan == 0) ? pola : 0;
-        }
-        break;
-
-      case 4:  // MODE BREATHING (Nafas)
-        {
-          float pulse = (sin(skrg * 0.003) * 0.5) + 0.5;
-          brFinal = pulse * brDasar;
-          bitmask = pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[i].polaSegmen[frameAktif];
-        }
-        break;
-
-      case 5:  // MODE STROBO (Kedip Kilat)
-        {
-          brFinal = (skrg % 100 < 50) ? brDasar : 0;
-          bitmask = pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[i].polaSegmen[frameAktif];
-        }
-        break;
-
-      case 6:  // MODE KEDIP (Kedip Santai)
-        {
-          brFinal = (skrg % 1000 < 500) ? brDasar : 0;
-          bitmask = pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[i].polaSegmen[frameAktif];
-        }
-        break;
-      case 7:  // MODE WAVE / BREATHING (Lembut)
-        {
+          float cycle = (skrg % (speed * 2)) / (float)(speed * 2);
+          float brightness = (sin(cycle * 2 * PI - PI/2) + 1.0) / 2.0;
+          brFinal = (uint8_t)(brightness * brDasar);
           
-          float kecepatan = (float)speed / 10.0;
-          float wave = (sin(millis() * 0.005 * kecepatan) + 1.0) / 2.0;
+          // Menggunakan Ternary
+          bitmask = pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[slot].polaSegmen[frameAktif];
+        }
+        break;
 
-          
+      case 2: // MODE 2: SMOOTH WAVE
+        {
+          float offset = d * 0.5;
+          float phase = (skrg / (float)speed) + offset;
+          float wave = (sin(phase) + 1.0) / 2.0;
           brFinal = (uint8_t)(wave * brDasar);
-
-         
-          bitmask = pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[i].polaSegmen[frameAktif];
+          
+          bitmask = pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[slot].polaSegmen[frameAktif];
         }
         break;
 
-      default:
-        bitmask = pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[i].polaSegmen[frameAktif];
+      case 3: // MODE 3: GENTLE PULSE
+        {
+          float t = (skrg % speed) / (float)speed;
+          float eased = (t < 0.5) ? (2 * t * t) : (1 - pow(-2 * t + 2, 2) / 2);
+          
+          brFinal = (uint8_t)(eased * brDasar);
+          bitmask = pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[slot].polaSegmen[frameAktif];
+        }
+        break;
+
+      case 4: // MODE 4: RIPPLE
+        {
+          int center = konfig.jumlahDigit / 2;
+          int distance = abs(d - center);
+          float ripple = (skrg / (float)speed) - (distance * 0.3);
+          float amplitude = (sin(ripple * 2) + 1.0) / 2.0;
+          brFinal = (uint8_t)(amplitude * brDasar);
+          
+          bitmask = pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[slot].polaSegmen[frameAktif];
+        }
+        break;
+
+      case 5: // MODE 5: SMOOTH CHASE
+        {
+          // Ternary khusus untuk logika chase
+          bitmask = pakaiPolaJam ? bufferJam[(d + (skrg / speed)) % konfig.jumlahDigit] 
+                                 : konfig.daftarEfek[slot].polaSegmen[(frameAktif + d) % konfig.daftarEfek[slot].jumlahFrame];
+        }
+        break;
+
+      case 6: // MODE 6: GENTLE BLINK
+        {
+          int period = 2000;
+          float t = (skrg % period) / (float)period;
+          float brightness = (t < 0.3) ? (t / 0.3) : ((t < 0.7) ? 1.0 : ((1.0 - t) / 0.3));
+          
+          brFinal = (uint8_t)(brightness * brDasar);
+          bitmask = pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[slot].polaSegmen[frameAktif];
+        }
+        break;
+        
+      case 7: // MODE 7: SEQUENTIAL FADE
+        {
+          float digitPhase = (skrg / (float)speed) - (d * 0.5);
+          float fade = (sin(digitPhase * 2) + 1.0) / 2.0;
+          
+          // Ternary bertingkat (Nested Ternary)
+          bitmask = (fade < 0.1) ? 0x00 : (pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[slot].polaSegmen[frameAktif]);
+          if (fade >= 0.1) brFinal = (uint8_t)(fade * brDasar);
+        }
+        break;
+
+      case 8: // MODE 8: HEARTBEAT
+        {
+          int period = 2000;
+          int phase = skrg % period;
+          float brightness = (phase < 100) ? 1.0 : 
+                             (phase < 150) ? (1.0 - ((phase - 100) / 50.0)) : 
+                             (phase < 300) ? 0.2 : 
+                             (phase < 400) ? 1.0 : 
+                             (phase < 450) ? (1.0 - ((phase - 400) / 50.0)) : 0.2;
+          
+          brFinal = (uint8_t)(brightness * brDasar);
+          bitmask = pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[slot].polaSegmen[frameAktif];
+        }
+        break;
+
+      default: // DEFAULT: STATIC
+        bitmask = pakaiPolaJam ? bufferJam[d] : konfig.daftarEfek[slot].polaSegmen[frameAktif];
+        brFinal = brDasar;
         break;
     }
 
-    // Jika pola segmen biasa, tambahkan DP sesuai config
-    if (!pakaiPolaJam && konfig.daftarEfek[i].pakaiDP) {
+    // Tambahkan DP (Decimal Point) jika perlu
+    if (!pakaiPolaJam && konfig.daftarEfek[slot].pakaiDP) {
       bitmask |= 0x80;
     }
 

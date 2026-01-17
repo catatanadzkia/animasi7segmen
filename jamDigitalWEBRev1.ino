@@ -4,10 +4,12 @@
 #include <Preferences.h>
 #include <HTTPClient.h>
 #include <ESPmDNS.h>
+#include <LittleFS.h>
 #include <NetworkClientSecure.h>  // Penting untuk HTTPS/GAS
 #include <ArduinoOTA.h>
 #include "time.h"
 #include "configSystem.h"
+#include "config_manajer.h"
 #include "displayLogic.h"
 #include "systemLogic.h"
 #include "webHandler.h"
@@ -36,6 +38,10 @@ int detikSekarang;                 // Deklarasikan agar bisa dipakai di loop dan
 String lastSyncTime = "Belum Sinkron";
 unsigned long lastCekWiFi = 0;
 Preferences pref;
+bool mdnsOn = false;
+bool scanOn = false;
+
+
 TaskHandle_t TaskUltra;
 
 
@@ -134,6 +140,7 @@ void inisialisasiHardware();
 void setupWiFi();
 void setupServer();
 void cekDanTampilkan();
+void WiFiEvent(arduino_event_id_t event);
 
 void setup() {
   Serial.begin(115200);
@@ -143,21 +150,30 @@ void setup() {
     Serial.println("Gagal Mount LittleFS!");
     return;
   }
-
+  
   // 2. MUAT CONFIG DULU (PENTING!)
-  // Agar ESP32 tahu urlGAS, timezone, dan nama perangkat
-  muatConfig();
+  // --- SYSTEM ----
+  loadSystemConfig();
+  // --- HAMA ---
+  loadHama();
+  // --- SHOLAT ---
+  loadSholatConfig();
+  // --- TANGGAL ---
+  loadTanggalConfig();
+  // --- EFEK ----
+  loadEfekConfig();
 
   // 3. Inisialisasi Hardware & WiFi
   inisialisasiHardware();
+  WiFi.onEvent(WiFiEvent);
   setupWiFi();
-  setupServer();
+  
 
   // 4. Sinkronisasi Waktu NTP
   configTime(konfig.timezone * 3600, 0, "id.pool.ntp.org", "time.google.com", "pool.ntp.org");
 
   // 5. CEK SYNC PERDANA (Setelah Config & WiFi siap)
-  // Tunggu sebentar sampai waktu NTP sinkron (opsional tapi bagus)
+
   delay(1000);
   if (!LittleFS.exists("/jadwal.json") || strlen(konfig.terakhirSync) < 5) {
     Serial.println("- Data kosong/awal, mencoba sinkronisasi perdana...");
@@ -171,6 +187,7 @@ void setup() {
   ArduinoOTA.begin();
 
   xTaskCreatePinnedToCore(UltraTaskCode, "TaskUltra", 10000, NULL, 1, &TaskUltra, 0);
+  setupServer();
 
   Serial.println("Sistem Siap!");
 }
@@ -224,8 +241,8 @@ void syncJadwalSholat() {
   }
 }
 
-// Variabel RAM untuk jadwal hari ini (Format Menit dari Tengah Malam agar mudah dihitung)
-int jadwalMenit[6];  // 0:Imsak, 1:Subuh, 2:Dzuhur, 3:Ashar, 4:Maghrib, 5:Isya
+
+int jadwalMenit[6];
 
 void muatJadwalSekarang() {
   if (!LittleFS.exists("/jadwal.json")) {
@@ -274,7 +291,7 @@ void muatJadwalSekarang() {
 
 void loop() {
   ArduinoOTA.handle();
-  
+
 
 
   // --- TUGAS LAMBAT (Setiap 1 Detik) ---
@@ -288,7 +305,8 @@ void loop() {
     }
 
     if (SimpanOtomatis && (millis() - lastChangeTime > 10000)) {
-      simpanConfig();
+      saveSystemConfig();
+      saveHama();
       SimpanOtomatis = false;
     }
   }
@@ -328,64 +346,61 @@ void inisialisasiHardware() {
 }
 
 
+// ---- SETUP WIFI (DIPANGGIL SEKALI) ----
 void setupWiFi() {
-  // 1. Ambil data dari "Brankas" Preferences (NVS)
+
   pref.begin("akses", true);
-  String st_ssid = pref.getString("st_ssid", ""); 
-  String st_pass = pref.getString("st_pass", "");
-  // Ambil nama perangkat untuk SSID AP dan Hostname
-  String ap_name = konfig.namaPerangkat; 
-  if(ap_name == "") ap_name = "Jam-Pintar-Bos";
+  String ssid = pref.getString("st_ssid", "");
+  String pass = pref.getString("st_pass", "");
   pref.end();
 
-  // 2. Set Mode Awal: AP + STA (Dua pintu terbuka)
+  String apName = konfig.namaPerangkat;
+  if (apName == "") apName = "JamBos";
+
   WiFi.mode(WIFI_AP_STA);
-  
-  // Set Hostname agar muncul di daftar perangkat Router
-  WiFi.setHostname(ap_name.c_str());
+  WiFi.setHostname(apName.c_str());
 
-  // 3. Nyalakan WiFi AP (Pintu Darurat)
-  // Kita buat tanpa password agar Bos tidak terkunci jika lupa
-  WiFi.softAP(ap_name.c_str(), ""); 
-  Serial.println("\n[AP] Aktif: " + ap_name);
+  WiFi.setAutoReconnect(true);  // biarkan stack
+  WiFi.persistent(false);
 
-  // 4. Jika ada data WiFi rumah, coba koneksi
-  if (st_ssid != "") {
-    Serial.println("[STA] Mencoba konek ke: " + st_ssid);
-    WiFi.begin(st_ssid.c_str(), st_pass.c_str());
-
-    // Tunggu maksimal 10 detik (20 * 500ms)
-    int timeout = 0;
-    while (WiFi.status() != WL_CONNECTED && timeout < 20) {
-      delay(500);
-      Serial.print(".");
-      timeout++;
-    }
-
-    // 5. Cek Hasil Koneksi
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("\n[Sukses] Terhubung ke WiFi Rumah!");
-      Serial.print("[IP] Lokal: ");
-      Serial.println(WiFi.localIP());
-
-      // KONEK BERHASIL: Matikan AP untuk hemat daya & kestabilan
-      WiFi.mode(WIFI_STA); 
-      Serial.println("[Mode] AP Dimatikan (STA Only)");
-    } else {
-      Serial.println("\n[Gagal] WiFi Rumah tidak terjangkau.");
-      Serial.println("[Mode] Tetap AP_STA (Pintu Darurat Terbuka)");
-    }
-  } else {
-    Serial.println("[Info] Data WiFi rumah kosong. Standby di mode AP.");
-  }
-
-  // 6. Jalankan mDNS (Akses lewat http://nama-perangkat.local)
-  if (MDNS.begin(ap_name.c_str())) {
-    MDNS.addService("http", "tcp", 80);
-    Serial.println("[mDNS] http://" + ap_name + ".local");
+  if (ssid != "") {
+    WiFi.begin(ssid.c_str(), pass.c_str());
   }
 }
+void WiFiEvent(arduino_event_id_t event) {
 
+  switch (event) {
+
+    // === STA DAPAT IP ===
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+
+      if (!mdnsOn) {
+        if (MDNS.begin(konfig.namaPerangkat)) {
+          MDNS.addService("http", "tcp", 80);
+          mdnsOn = true;
+        }
+      }
+
+      // AP OFF kalau nyala
+      WiFi.softAPdisconnect(true);
+      break;
+
+    // === STA PUTUS ===
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+
+      if (mdnsOn) {
+        MDNS.end();  // ⬅️ INI WAJIB
+        mdnsOn = false;
+      }
+
+      // AP ON untuk akses darurat
+      WiFi.softAP(konfig.namaPerangkat, "12345678");
+      break;
+
+    default:
+      break;
+  }
+}
 
 void cekDanTampilkan() {
   setKecerahan(konfig.kecerahanGlobal);
